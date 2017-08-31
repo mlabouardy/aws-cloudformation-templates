@@ -1,2 +1,3 @@
-# aws-cloudformation-templates
-CloudFormation Templates
+# AWS CloudFormation Templates
+
+* Install MEAN Stack Using CloudFormation
