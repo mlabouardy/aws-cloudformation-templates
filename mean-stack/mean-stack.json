@@ -1,18 +1,21 @@
 {
-  "AWSTemplateFormatVersion" : "2017-08-31",
+  "AWSTemplateFormatVersion" : "2010-09-09",
   "Description" : "Create an EC2 instance with MEAN stack installed",
   "Parameters" : {
     "InstanceType" : {
-      "Description" : "Instance type",
-      "Type" : "String"
+      "Description" : "EC2 Instance type",
+      "Type" : "String",
+      "Default" : "t2.micro",
+      "AllowedValues" : ["t1.micro", "t2.micro", "t2.small", "t2.medium", "m1.small", "m1.medium", "m1.large"],
+      "ConstraintDescription" : "Must be a valid EC2 instance type"
     },
     "KeyName" : {
       "Description" : "Key pair to allow SSH access to the instance",
-      "Type" : "String"
+      "Type" : "AWS::EC2::KeyPair::KeyName"
     }
   },
   "Resources": {
-    "EC2Instance" : {
+    "MEANInstance" : {
       "Type" : "AWS::EC2::Instance",
       "Properties" : {
         "ImageId" : "ami-4fffc834",
@@ -21,11 +24,85 @@
         },
         "KeyName" : {
           "Ref" : "KeyName"
+        },
+        "SecurityGroups" : [
+          {
+            "Ref" : "MEANInstanceSecurityGroup"
+          }
+        ],
+        "UserData" : {
+          "Fn::Base64": {
+            "Fn::Join" : [
+              "",
+              [
+                "#!/bin/bash\n",
+                "yum update -y\n",
+                "rm /etc/yum.repos.d/mongodb.repo\n",
+                "mkdir -p /data/db\n",
+                "echo '[mongodb]' >>  /etc/yum.repos.d/mongodb.repo\n",
+                "echo 'name=MongoDB Repository' >>  /etc/yum.repos.d/mongodb.repo\n",
+                "echo 'baseurl=http://downloads-distro.mongodb.org/repo/redhat/os/x86_64/' >>  /etc/yum.repos.d/mongodb.repo\n",
+                "echo 'gpgcheck=0' >>  /etc/yum.repos.d/mongodb.repo\n",
+                "echo 'enabled=1' >>  /etc/yum.repos.d/mongodb.repo\n",
+                "echo \"/etc/yum.repos.d/mondgob.repo created\"\n",
+                "yum install -y mongo-10gen mongo-10gen-server\n",
+                "sed -i 's/bind_ip=127.0.0.1/bind_ip=0.0.0.0/' /etc/mongod.conf\n",
+                "service mongod start\n",
+                "echo 'Mongodb Installed'\n",
+                "curl --silent --location https://rpm.nodesource.com/setup_8.x | bash -\n",
+                "yum install -y nodejs\n"
+                "echo 'Node.JS Installed'\n"
+              ]
+            ]
+          }
         }
+      }
+    },
+    "MEANInstanceSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable MongoDB & NodeJS server ports",
+        "SecurityGroupIngress" : [
+          {
+            "IpProtocol" : "tcp",
+            "FromPort" : "27017",
+            "ToPort" : "27017",
+            "CidrIp" : "0.0.0.0/0"
+          },
+          {
+            "IpProtocol" : "tcp",
+            "FromPort" : "3000",
+            "ToPort" : "3000",
+            "CidrIp" : "0.0.0.0/0"
+          },
+          {
+            "IpProtocol" : "tcp",
+            "FromPort" : "22",
+            "ToPort" : "22",
+            "CidrIp" : "0.0.0.0/0"
+          }
+        ]
       }
     }
   },
   "Outputs" : {
-
+    "ApplicationURL" : {
+      "Description" : "URL for MEAN Stack application",
+      "Value" : {
+        "Fn::Join" : [
+          "",
+          [
+            "http://",
+            {
+              "Fn::GetAtt":[
+                "MEANInstance",
+                "PublicDnsName"
+              ]
+            },
+            ":3000"
+          ]
+        ]
+      }
+    }
   }
 }
