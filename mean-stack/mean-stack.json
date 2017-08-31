@@ -1,0 +1,31 @@
+{
+  "AWSTemplateFormatVersion" : "2017-08-31",
+  "Description" : "Create an EC2 instance with MEAN stack installed",
+  "Parameters" : {
+    "InstanceType" : {
+      "Description" : "Instance type",
+      "Type" : "String"
+    },
+    "KeyName" : {
+      "Description" : "Key pair to allow SSH access to the instance",
+      "Type" : "String"
+    }
+  },
+  "Resources": {
+    "EC2Instance" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "ImageId" : "ami-4fffc834",
+        "InstanceType" : {
+          "Ref" : "InstanceType"
+        },
+        "KeyName" : {
+          "Ref" : "KeyName"
+        }
+      }
+    }
+  },
+  "Outputs" : {
+
+  }
+}
