@@ -1,0 +1,89 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+  "Description" : "Setup EC2 instance with nginx",
+  "Parameters" : {
+    "InstanceType" : {
+      "Description" : "EC2 configuration",
+      "Type" : "String",
+      "Default" : "t2.micro",
+      "AllowedValues" : ["t2.micro", "t2.small", "t2.medium"],
+      "ConstraintDescription" : "Must be a valid instance type"
+    },
+    "KeyName" : {
+      "Description" : "SSH Key",
+      "Type": "AWS::EC2::KeyPair::KeyName"
+    }
+  },
+  "Resources": {
+    "WebServer" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "ImageId" : "ami-4fffc834",
+        "InstanceType" : {
+          "Ref" : "InstanceType"
+        },
+        "KeyName" : {
+          "Ref" : "KeyName"
+        },
+        "SecurityGroups" : [
+          {
+            "Ref" : "WebSG"
+          }
+        ],
+        "UserData" : {
+          "Fn::Base64": {
+            "Fn::Join" : [
+              "",
+              [
+                "#!/bin/sh\n",
+                "yum install -y httpd\n",
+                "chkconfig httpd on\n",
+                "httpd\n",
+                "echo '<html>Hello guys !<html/>' > /var/www/html/index.html"
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "WebSG" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Allow HTTP traffic",
+        "SecurityGroupIngress" : [
+          {
+            "FromPort" : "80",
+            "ToPort" : "80",
+            "IpProtocol" : "tcp",
+            "CidrIp" : "0.0.0.0/0"
+          },
+          {
+            "FromPort" : "22",
+            "ToPort" : "22",
+            "IpProtocol" : "tcp",
+            "CidrIp" : "0.0.0.0/0"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs" : {
+    "ServerIP" : {
+      "Description" : "HTTP Server URL",
+      "Value" : {
+        "Fn::Join" : [
+          "",
+          [
+            "http://",
+            {
+              "Fn::GetAtt" : [
+                "WebServer",
+                "PublicDnsName"
+              ]
+            }
+          ]
+        ]
+      }
+    }
+  }
+}
