@@ -1,0 +1,346 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+  "Parameters" : {
+    "KeyName" : {
+      "Description" : "EC2 instance ssh key",
+      "Type" : "AWS::EC2::KeyPair::KeyName"
+    },
+    "InstanceType" : {
+      "Description" : "EC2 instance type",
+      "Type" : "String",
+      "Default" : "t2.micro",
+      "AllowedValues" : [ "t2.micro", "t2.small", "t2.medium"]
+    }
+  },
+  "Resources" : {
+    "Staging" : {
+      "Type" : "AWS::EC2::VPC",
+      "Properties" : {
+        "CidrBlock" : "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport" : true,
+        "Tags" : [
+           {
+             "Key" : "Name",
+             "Value" : "Staging"
+           }
+        ]
+      }
+    },
+    "PublicSubnet" : {
+      "Type" : "AWS::EC2::Subnet",
+      "Properties" : {
+        "CidrBlock" : "10.0.0.0/24",
+        "AvailabilityZone" : "us-east-1a",
+        "MapPublicIpOnLaunch" : true,
+        "VpcId" : {
+          "Ref" : "Staging"
+        },
+        "Tags" : [
+           {
+             "Key" : "Name",
+             "Value" : "public-10.0.0.0-us-east-1a"
+           }
+        ]
+      }
+    },
+    "PrivateSubnet" : {
+      "Type" : "AWS::EC2::Subnet",
+      "Properties" : {
+        "CidrBlock" : "10.0.1.0/24",
+        "AvailabilityZone" : "us-east-1b",
+        "VpcId" : {
+          "Ref" : "Staging"
+        },
+        "Tags" : [
+           {
+             "Key" : "Name",
+             "Value" : "private-10.0.1.0-us-east-1b"
+           }
+        ]
+      }
+    },
+    "IGW" : {
+      "Type" : "AWS::EC2::InternetGateway",
+      "Properties" : {
+        "Tags" : [
+           {
+             "Key" : "Name",
+             "Value" : "igw"
+           }
+        ]
+      }
+    },
+    "GatewayToInternet" : {
+      "Type" : "AWS::EC2::VPCGatewayAttachment",
+      "Properties" : {
+        "VpcId" : {
+          "Ref" : "Staging"
+        },
+        "InternetGatewayId" : {
+          "Ref" : "IGW"
+        }
+      }
+    },
+    "NatIpAddress" : {
+      "Type" : "AWS::EC2::EIP",
+      "Properties" : {
+        "Domain" : "vpc"
+      }
+    },
+    "NatGateway" : {
+      "Type" : "AWS::EC2::NatGateway",
+      "Properties" : {
+        "AllocationId" : {
+          "Fn::GetAtt" : [
+            "NatIpAddress",
+            "AllocationId"
+          ]
+        },
+        "SubnetId" : {
+          "Ref" : "PublicSubnet"
+        }
+      }
+    },
+    "PublicRouteTable" : {
+      "Type" : "AWS::EC2::RouteTable",
+      "Properties" : {
+        "VpcId" : {
+          "Ref" : "Staging"
+        },
+        "Tags" : [
+           {
+             "Key" : "Name",
+             "Value" : "public-rt"
+           }
+        ]
+      }
+    },
+    "PublicRoute" : {
+      "Type" : "AWS::EC2::Route",
+      "DependsOn" : "GatewayToInternet",
+      "Properties" : {
+        "RouteTableId" : {
+          "Ref" : "PublicRouteTable"
+        },
+        "DestinationCidrBlock" : "0.0.0.0/0",
+        "GatewayId" : {
+          "Ref" : "IGW"
+        }
+      }
+    },
+    "PublicSubnetRouteTableAssociation" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "SubnetId" : {
+          "Ref" : "PublicSubnet"
+        },
+        "RouteTableId" : {
+          "Ref" : "PublicRouteTable"
+        }
+      }
+    },
+    "PrivateRouteTable" : {
+      "Type" : "AWS::EC2::RouteTable",
+      "Properties" : {
+        "VpcId" : {
+          "Ref" : "Staging"
+        },
+        "Tags" : [
+           {
+             "Key" : "Name",
+             "Value" : "private-rt"
+           }
+        ]
+      }
+    },
+    "PrivateRoute" : {
+      "Type" : "AWS::EC2::Route",
+      "DependsOn" : "NatGateway",
+      "Properties" : {
+        "RouteTableId" : {
+          "Ref" : "PrivateRouteTable"
+        },
+        "DestinationCidrBlock" : "0.0.0.0/0",
+        "GatewayId" : {
+          "Ref" : "NatGateway"
+        }
+      }
+    },
+    "PrivateSubnetRouteTableAssociation" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "SubnetId" : {
+          "Ref" : "PrivateSubnet"
+        },
+        "RouteTableId" : {
+          "Ref" : "PrivateRouteTable"
+        }
+      }
+    },
+    "WebSG" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Allow HTTP Traffic & SSH access from anywhere",
+        "VpcId" : {
+          "Ref" : "Staging"
+        },
+        "SecurityGroupIngress" : [
+          {
+            "IpProtocol" : "tcp",
+            "FromPort" : "80",
+            "ToPort" : "80",
+            "CidrIp" : "0.0.0.0/0"
+          },
+          {
+            "FromPort" : "22",
+            "ToPort" : "22",
+            "IpProtocol" : "tcp",
+            "CidrIp" : "0.0.0.0/0"
+          }
+        ],
+        "Tags" : [
+           {
+             "Key" : "Name",
+             "Value" : "WebSG"
+           }
+        ]
+      }
+    },
+    "DBSG" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Allow MySQL Traffic & SSH access from public subnet",
+        "VpcId" : {
+          "Ref" : "Staging"
+        },
+        "SecurityGroupIngress" : [
+          {
+            "IpProtocol" : "tcp",
+            "FromPort" : "3306",
+            "ToPort" : "3306",
+            "SourceSecurityGroupId" : {
+              "Ref" : "WebSG"
+            }
+          },
+          {
+            "FromPort" : "22",
+            "ToPort" : "22",
+            "IpProtocol" : "tcp",
+            "SourceSecurityGroupId" : {
+              "Ref" : "WebSG"
+            }
+          }
+        ],
+        "Tags" : [
+           {
+             "Key" : "Name",
+             "Value" : "DBSG"
+           }
+        ]
+      }
+    },
+    "WebServer" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "ImageId" : "ami-4fffc834",
+        "SubnetId" : {
+          "Ref" : "PublicSubnet"
+        },
+        "InstanceType" : {
+          "Ref" : "InstanceType"
+        },
+        "KeyName" : {
+          "Ref" : "KeyName"
+        },
+        "SecurityGroupIds" : [
+          {
+            "Ref" : "WebSG"
+          }
+        ],
+        "UserData" : {
+          "Fn::Base64": {
+            "Fn::Join" : [
+              "",
+              [
+                "#!/bin/sh\n",
+                "yum install -y httpd\n",
+                "chkconfig httpd on\n",
+                "httpd\n",
+                "echo '<html>Hello guys !<html/>' > /var/www/html/index.html"
+              ]
+            ]
+          }
+        },
+        "Tags" : [
+           {
+             "Key" : "Name",
+             "Value" : "webserver"
+           }
+        ]
+      }
+    },
+    "Database" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "ImageId" : "ami-4fffc834",
+        "SubnetId" : {
+          "Ref" : "PrivateSubnet"
+        },
+        "InstanceType" : {
+          "Ref" : "InstanceType"
+        },
+        "KeyName" : {
+          "Ref" : "KeyName"
+        },
+        "SecurityGroupIds" : [
+          {
+            "Ref" : "DBSG"
+          }
+        ],
+        "Tags" : [
+           {
+             "Key" : "Name",
+             "Value" : "database"
+           }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "WebServer" : {
+      "Description" : "Webserver IP address",
+      "Value" : {
+        "Fn::Join" : [
+          "",
+          [
+            "http://",
+            {
+              "Fn::GetAtt" : [
+                "WebServer",
+                "PublicDnsName"
+              ]
+            }
+          ]
+        ]
+      }
+    },
+    "Database" : {
+      "Description" : "Database URI",
+      "Value" : {
+        "Fn::Join" : [
+          "",
+          [
+            {
+              "Fn::GetAtt" : [
+                "Database",
+                "PrivateIp"
+              ]
+            },
+            ":3306"
+          ]
+        ]
+      }
+    }
+  }
+}
