@@ -67,7 +67,7 @@
     "SSHAccessSG" : {
       "Type" : "AWS::EC2::SecurityGroup",
       "Properties" : {
-        "Description" : "Allow SSH access from anywhere",
+        "GroupDescription" : "Allow SSH access from anywhere",
         "SecurityGroupIngress" : [
           {
             "FromPort" : "22",
